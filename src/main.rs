@@ -1,5 +1,7 @@
 mod errors;
 use rand::Rng;
+use rand::rngs::ThreadRng;
+use std::thread::available_parallelism;
 
 type Player = i8;
 
@@ -21,8 +23,7 @@ struct LegalMoves {
     player: Player,
 }
 impl LegalMoves {
-    pub fn random(&self) -> Action {
-        let mut rng = rand::thread_rng();
+    pub fn random(&self, rng: &mut ThreadRng) -> Action {
         let mut choice = rng.gen_range(0..self.occupied.count_zeros());
         let mut current = 1;
         loop {
@@ -123,18 +124,20 @@ impl std::fmt::Display for GameState {
     }
 }
 
-fn main() -> Result<(), crate::errors::Error> {
+fn play(max_count: u32) -> (u32, u32, u32, u32) {
     let mut play1wins = 0;
     let mut play2wins = 0;
     let mut draw = 0;
     let mut played = 0;
+    let mut rng = rand::thread_rng();
+
     loop {
         let mut state = GameState::default();
         let mut player: Player = 1;
         played += 1;
 
         loop {
-            let action = state.legal_moves(player).random();
+            let action = state.legal_moves(player).random(&mut rng);
             state = state.perform(action);
             match state.score() {
                 Score::Player1Wins => {
@@ -155,15 +158,38 @@ fn main() -> Result<(), crate::errors::Error> {
             player = -player;
         }
 
-        if played >= 1_000_000 {
+        if played >= max_count {
             break;
         }
     }
+    (played, play1wins, play2wins, draw)
+}
+
+fn main() -> Result<(), crate::errors::Error> {
+    const TOTAL_RUNS: u32 = 1_000_000;
+    let cores: u32 = available_parallelism().unwrap().get().try_into().unwrap();
+
+    let handles = (0..cores).map(|_| {
+        std::thread::spawn(move || play(TOTAL_RUNS / cores))
+    }).collect::<Vec<_>>();
+
+    let mut played = 0;
+    let mut p1 = 0;
+    let mut p2 = 0;
+    let mut draw = 0;
+    for h in handles {
+        let (tp, tp1, tp2, td) = h.join().unwrap();
+        played += tp;
+        p1 += tp1;
+        p2 += tp2;
+        draw += td;
+    }
+
     println!(
-        "Played {}, play1 {:.2}%, play2 {:.2}%, draw {:.2}%",
+        "total {} play1 {:.2}%, play2 {:.2}%, draw {:.2}%",
         played,
-        play1wins as f32 / played as f32 * 100.,
-        play2wins as f32 / played as f32 * 100.,
+        p1 as f32 / played as f32 * 100.,
+        p2 as f32 / played as f32 * 100.,
         draw as f32 / played as f32 * 100.
     );
     Ok(())
