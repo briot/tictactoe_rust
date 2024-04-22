@@ -1,13 +1,11 @@
 mod errors;
-use rand::Rng;
 use rand::rngs::ThreadRng;
+use rand::Rng;
 use std::thread::available_parallelism;
-
-type Player = i8;
 
 #[derive(Debug)]
 enum Action {
-    Put { player: Player, mask: u32 },
+    Put { is_player1: bool, mask: u16 },
 }
 
 #[derive(Debug)]
@@ -19,18 +17,24 @@ enum Score {
 }
 
 struct LegalMoves {
-    occupied: u32, //  each bit is whether the corresponding cell is legal
-    player: Player,
+    occupied: u16, //  each bit is whether the corresponding cell is legal
+    is_player1: bool,
 }
-impl LegalMoves {
-    pub fn random(&self, rng: &mut ThreadRng) -> Action {
-        let mut choice = rng.gen_range(0..self.occupied.count_zeros());
+
+trait Strategy {
+    fn play(&mut self, legal: &LegalMoves, rng: &mut ThreadRng) -> Action;
+}
+
+struct StrategyRandom {}
+impl Strategy for StrategyRandom {
+    fn play(&mut self, legal: &LegalMoves, rng: &mut ThreadRng) -> Action {
+        let mut choice = rng.gen_range(0..legal.occupied.count_zeros());
         let mut current = 1;
         loop {
-            if (self.occupied & current) == 0 {
+            if (legal.occupied & current) == 0 {
                 if choice == 0 {
                     return Action::Put {
-                        player: self.player,
+                        is_player1: legal.is_player1,
                         mask: current,
                     };
                 }
@@ -42,14 +46,14 @@ impl LegalMoves {
 }
 
 struct GameState {
-    player1: u32,   // bit set to 1 if player1 occupies the cell
-    player2: u32,   // bit set to 1 if player1 occupies the cell
+    player1: u16, // bit set to 1 if player1 occupies the cell
+    player2: u16, // bit set to 1 if player1 occupies the cell
 }
 
 impl Default for GameState {
     fn default() -> Self {
         GameState {
-            player1: !0b111111111,  // so that count_zeros only looks at board
+            player1: !0b111111111, // so that count_zeros only looks at board
             player2: !0b111111111,
         }
     }
@@ -58,12 +62,12 @@ impl Default for GameState {
 impl GameState {
     pub fn perform(self, action: Action) -> Self {
         match action {
-            Action::Put { player, mask } => {
+            Action::Put { is_player1, mask } => {
                 let mut next = GameState {
                     player1: self.player1,
                     player2: self.player2,
                 };
-                if player == 1 {
+                if is_player1 {
                     next.player1 |= mask;
                 } else {
                     next.player2 |= mask;
@@ -73,32 +77,32 @@ impl GameState {
         }
     }
 
-    pub fn legal_moves(&self, player: Player) -> LegalMoves {
+    pub fn legal_moves(&self, is_player1: bool) -> LegalMoves {
         LegalMoves {
             occupied: self.player1 | self.player2,
-            player,
+            is_player1,
         }
     }
 
     pub fn score(&self) -> Score {
-        if   self.player1 & 0b000000111 == 0b000000111
-          || self.player1 & 0b000111000 == 0b000111000
-          || self.player1 & 0b111000000 == 0b111000000
-          || self.player1 & 0b100100100 == 0b100100100
-          || self.player1 & 0b010010010 == 0b010010010
-          || self.player1 & 0b001001001 == 0b001001001
-          || self.player1 & 0b100010001 == 0b100010001
-          || self.player1 & 0b001010100 == 0b001010100
+        if self.player1 & 0b000000111 == 0b000000111
+            || self.player1 & 0b000111000 == 0b000111000
+            || self.player1 & 0b111000000 == 0b111000000
+            || self.player1 & 0b100100100 == 0b100100100
+            || self.player1 & 0b010010010 == 0b010010010
+            || self.player1 & 0b001001001 == 0b001001001
+            || self.player1 & 0b100010001 == 0b100010001
+            || self.player1 & 0b001010100 == 0b001010100
         {
             Score::Player1Wins
         } else if self.player2 & 0b000000111 == 0b000000111
-          || self.player2 & 0b000111000 == 0b000111000
-          || self.player2 & 0b111000000 == 0b111000000
-          || self.player2 & 0b100100100 == 0b100100100
-          || self.player2 & 0b010010010 == 0b010010010
-          || self.player2 & 0b001001001 == 0b001001001
-          || self.player2 & 0b100010001 == 0b100010001
-          || self.player2 & 0b001010100 == 0b001010100
+            || self.player2 & 0b000111000 == 0b000111000
+            || self.player2 & 0b111000000 == 0b111000000
+            || self.player2 & 0b100100100 == 0b100100100
+            || self.player2 & 0b010010010 == 0b010010010
+            || self.player2 & 0b001001001 == 0b001001001
+            || self.player2 & 0b100010001 == 0b100010001
+            || self.player2 & 0b001010100 == 0b001010100
         {
             Score::Player2Wins
         } else if (self.player1 | self.player2) == !0 {
@@ -111,10 +115,14 @@ impl GameState {
 
 impl std::fmt::Display for GameState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn img(state: &GameState, bit: u32) -> char {
-            if state.player1 & bit != 0 { 'X' }
-            else if state.player2 & bit != 0 { 'O' }
-            else { '.' }
+        fn img(state: &GameState, bit: u16) -> char {
+            if state.player1 & bit != 0 {
+                'X'
+            } else if state.player2 & bit != 0 {
+                'O'
+            } else {
+                '.'
+            }
         }
         writeln!(f, "{:?}", self.score())?;
         writeln!(f, "{} {} {}", img(self, 1), img(self, 2), img(self, 4))?;
@@ -124,7 +132,11 @@ impl std::fmt::Display for GameState {
     }
 }
 
-fn play(max_count: u32) -> (u32, u32, u32, u32) {
+fn play<Strategy1: Strategy, Strategy2: Strategy>(
+    max_count: u32,
+    player1: &mut Strategy1,
+    player2: &mut Strategy2,
+) -> (u32, u32, u32, u32) {
     let mut play1wins = 0;
     let mut play2wins = 0;
     let mut draw = 0;
@@ -133,11 +145,17 @@ fn play(max_count: u32) -> (u32, u32, u32, u32) {
 
     loop {
         let mut state = GameState::default();
-        let mut player: Player = 1;
+        let mut is_player1 = true;
         played += 1;
 
         loop {
-            let action = state.legal_moves(player).random(&mut rng);
+            let legal = state.legal_moves(is_player1);
+            let action = if is_player1 {
+                player1.play(&legal, &mut rng)
+            } else {
+                player2.play(&legal, &mut rng)
+            };
+
             state = state.perform(action);
             match state.score() {
                 Score::Player1Wins => {
@@ -155,7 +173,7 @@ fn play(max_count: u32) -> (u32, u32, u32, u32) {
                 Score::Unknown => {}
             }
 
-            player = -player;
+            is_player1 = !is_player1;
         }
 
         if played >= max_count {
@@ -169,9 +187,17 @@ fn main() -> Result<(), crate::errors::Error> {
     const TOTAL_RUNS: u32 = 1_000_000;
     let cores: u32 = available_parallelism().unwrap().get().try_into().unwrap();
 
-    let handles = (0..cores).map(|_| {
-        std::thread::spawn(move || play(TOTAL_RUNS / cores))
-    }).collect::<Vec<_>>();
+    // Random vs Random:
+    //    theory says 58.49% of wins for player1, 28.81% for player1,
+    //    and 12.70% draw.
+
+    let handles = (0..cores)
+        .map(|_| std::thread::spawn(move || {
+            let mut player1 = StrategyRandom {};
+            let mut player2 = StrategyRandom {};
+            play(TOTAL_RUNS / cores, &mut player1, &mut player2)
+        }))
+        .collect::<Vec<_>>();
 
     let mut played = 0;
     let mut p1 = 0;
