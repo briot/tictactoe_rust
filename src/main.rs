@@ -3,8 +3,9 @@ use rand::Rng;
 
 type Player = i8;
 
+#[derive(Debug)]
 enum Action {
-    Put { player: Player, cell: usize },
+    Put { player: Player, mask: u32 },
 }
 
 #[derive(Debug)]
@@ -16,150 +17,108 @@ enum Score {
 }
 
 struct LegalMoves {
-    mask: u32, //  each bit is whether the corresponding cell is legal
-    count: u8,
+    occupied: u32, //  each bit is whether the corresponding cell is legal
     player: Player,
 }
 impl LegalMoves {
     pub fn random(&self) -> Action {
         let mut rng = rand::thread_rng();
-        let mut choice = rng.gen_range(0..self.count);
+        let mut choice = rng.gen_range(0..self.occupied.count_zeros());
         let mut current = 1;
-        let mut cell: usize = 0;
         loop {
-            if (self.mask & current) != 0 {
+            if (self.occupied & current) == 0 {
                 if choice == 0 {
                     return Action::Put {
                         player: self.player,
-                        cell,
+                        mask: current,
                     };
                 }
                 choice -= 1;
             }
-            cell += 1;
             current *= 2;
         }
     }
 }
 
-#[derive(Default)]
 struct GameState {
-    board: [i8; 9],
+    player1: u32,   // bit set to 1 if player1 occupies the cell
+    player2: u32,   // bit set to 1 if player1 occupies the cell
 }
+
+impl Default for GameState {
+    fn default() -> Self {
+        GameState {
+            player1: !0b111111111,  // so that count_zeros only looks at board
+            player2: !0b111111111,
+        }
+    }
+}
+
 impl GameState {
     pub fn perform(self, action: Action) -> Self {
         match action {
-            Action::Put { player, cell } => {
-                let mut b = self.board;
-                b[cell] = player;
-                GameState { board: b }
+            Action::Put { player, mask } => {
+                let mut next = GameState {
+                    player1: self.player1,
+                    player2: self.player2,
+                };
+                if player == 1 {
+                    next.player1 |= mask;
+                } else {
+                    next.player2 |= mask;
+                }
+                next
             }
         }
     }
 
     pub fn legal_moves(&self, player: Player) -> LegalMoves {
-        let mut count = 0;
-        let mut mask: u32 = 0;
-        let mut current: u32 = 1;
-        for cell in 0_usize..9 {
-            if self.board[cell] == 0 {
-                count += 1;
-                mask |= current;
-            }
-            current *= 2;
-        }
         LegalMoves {
-            count,
-            mask,
+            occupied: self.player1 | self.player2,
             player,
         }
     }
 
     pub fn score(&self) -> Score {
-        let row1 = self.board[0] + self.board[1] + self.board[2];
-        if row1 == 3 {
-            return Score::Player1Wins;
-        } else if row1 == -3 {
-            return Score::Player2Wins;
+        if   self.player1 & 0b000000111 == 0b000000111
+          || self.player1 & 0b000111000 == 0b000111000
+          || self.player1 & 0b111000000 == 0b111000000
+          || self.player1 & 0b100100100 == 0b100100100
+          || self.player1 & 0b010010010 == 0b010010010
+          || self.player1 & 0b001001001 == 0b001001001
+          || self.player1 & 0b100010001 == 0b100010001
+          || self.player1 & 0b001010100 == 0b001010100
+        {
+            Score::Player1Wins
+        } else if self.player2 & 0b000000111 == 0b000000111
+          || self.player2 & 0b000111000 == 0b000111000
+          || self.player2 & 0b111000000 == 0b111000000
+          || self.player2 & 0b100100100 == 0b100100100
+          || self.player2 & 0b010010010 == 0b010010010
+          || self.player2 & 0b001001001 == 0b001001001
+          || self.player2 & 0b100010001 == 0b100010001
+          || self.player2 & 0b001010100 == 0b001010100
+        {
+            Score::Player2Wins
+        } else if (self.player1 | self.player2) == !0 {
+            Score::Draw
+        } else {
+            Score::Unknown
         }
-
-        let row2 = self.board[3] + self.board[4] + self.board[5];
-        if row2 == 3 {
-            return Score::Player1Wins;
-        } else if row2 == -3 {
-            return Score::Player2Wins;
-        }
-
-        let row3 = self.board[6] + self.board[7] + self.board[8];
-        if row3 == 3 {
-            return Score::Player1Wins;
-        } else if row3 == -3 {
-            return Score::Player2Wins;
-        }
-
-        let col1 = self.board[0] + self.board[3] + self.board[6];
-        if col1 == 3 {
-            return Score::Player1Wins;
-        } else if col1 == -3 {
-            return Score::Player2Wins;
-        }
-
-        let col2 = self.board[1] + self.board[4] + self.board[7];
-        if col2 == 3 {
-            return Score::Player1Wins;
-        } else if col2 == -3 {
-            return Score::Player2Wins;
-        }
-
-        let col3 = self.board[2] + self.board[5] + self.board[8];
-        if col3 == 3 {
-            return Score::Player1Wins;
-        } else if col3 == -3 {
-            return Score::Player2Wins;
-        }
-
-        let diag1 = self.board[0] + self.board[4] + self.board[8];
-        if diag1 == 3 {
-            return Score::Player1Wins;
-        } else if diag1 == -3 {
-            return Score::Player2Wins;
-        }
-
-        let diag2 = self.board[6] + self.board[4] + self.board[2];
-        if diag2 == 3 {
-            return Score::Player1Wins;
-        } else if diag2 == -3 {
-            return Score::Player2Wins;
-        }
-
-        for j in 0..9 {
-            if self.board[j] == 0 {
-                return Score::Unknown;
-            }
-        }
-
-        Score::Draw
     }
 }
 
 impl std::fmt::Display for GameState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f)?;
-        writeln!(
-            f,
-            "{:2} {:2} {:2}",
-            self.board[0], self.board[1], self.board[2]
-        )?;
-        writeln!(
-            f,
-            "{:2} {:2} {:2}",
-            self.board[3], self.board[4], self.board[5]
-        )?;
-        writeln!(
-            f,
-            "{:2} {:2} {:2}",
-            self.board[6], self.board[7], self.board[8]
-        )?;
+        fn img(state: &GameState, bit: u32) -> char {
+            if state.player1 & bit != 0 { 'X' }
+            else if state.player2 & bit != 0 { 'O' }
+            else { '.' }
+        }
+        writeln!(f, "{:?}", self.score())?;
+        writeln!(f, "{} {} {}", img(self, 1), img(self, 2), img(self, 4))?;
+        writeln!(f, "{} {} {}", img(self, 8), img(self, 16), img(self, 32))?;
+        writeln!(f, "{} {} {}", img(self, 64), img(self, 128), img(self, 256))?;
         Ok(())
     }
 }
