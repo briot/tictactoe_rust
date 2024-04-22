@@ -1,0 +1,20 @@
+[package]
+name = "tictactoe"
+version = "0.1.0"
+edition = "2021"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+incremental = true
+debug = true   # for perf
+lto = "fat"
+
+[dependencies]
+# anyhow = { version = "1.0.75", features = ["backtrace"] }
+thiserror = { version = "1.0.50" }
+rand = "0.8.5"
