@@ -1,5 +1,5 @@
 mod errors;
-use rand::seq::SliceRandom;
+use rand::Rng;
 
 type Player = i8;
 
@@ -15,29 +15,64 @@ enum Score {
     Unknown,
 }
 
+struct LegalMoves {
+    mask: u32, //  each bit is whether the corresponding cell is legal
+    count: u8,
+    player: Player,
+}
+impl LegalMoves {
+    pub fn random(&self) -> Action {
+        let mut rng = rand::thread_rng();
+        let mut choice = rng.gen_range(0..self.count);
+        let mut current = 1;
+        let mut cell: usize = 0;
+        loop {
+            if (self.mask & current) != 0 {
+                if choice == 0 {
+                    return Action::Put {
+                        player: self.player,
+                        cell,
+                    };
+                }
+                choice -= 1;
+            }
+            cell += 1;
+            current *= 2;
+        }
+    }
+}
+
 #[derive(Default)]
 struct GameState {
     board: [i8; 9],
 }
 impl GameState {
-    pub fn perform(self, action: &Action) -> Self {
+    pub fn perform(self, action: Action) -> Self {
         match action {
             Action::Put { player, cell } => {
                 let mut b = self.board;
-                b[*cell] = *player;
+                b[cell] = player;
                 GameState { board: b }
             }
         }
     }
 
-    pub fn legal_actions(&self, player: Player) -> Vec<Action> {
-        let mut res = Vec::new();
+    pub fn legal_moves(&self, player: Player) -> LegalMoves {
+        let mut count = 0;
+        let mut mask: u32 = 0;
+        let mut current: u32 = 1;
         for cell in 0_usize..9 {
             if self.board[cell] == 0 {
-                res.push(Action::Put { player, cell });
+                count += 1;
+                mask |= current;
             }
+            current *= 2;
         }
-        res
+        LegalMoves {
+            count,
+            mask,
+            player,
+        }
     }
 
     pub fn score(&self) -> Score {
@@ -130,7 +165,6 @@ impl std::fmt::Display for GameState {
 }
 
 fn main() -> Result<(), crate::errors::Error> {
-    let mut rng = rand::thread_rng();
     let mut play1wins = 0;
     let mut play2wins = 0;
     let mut draw = 0;
@@ -141,8 +175,7 @@ fn main() -> Result<(), crate::errors::Error> {
         played += 1;
 
         loop {
-            let actions = state.legal_actions(player);
-            let action = actions.choose(&mut rng).unwrap();
+            let action = state.legal_moves(player).random();
             state = state.perform(action);
             match state.score() {
                 Score::Player1Wins => {
