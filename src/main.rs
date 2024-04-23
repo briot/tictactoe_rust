@@ -81,11 +81,9 @@ fn main() -> Result<(), crate::errors::Error> {
 
     let handles = (0..cores)
         .map(|_| {
-            std::thread::spawn(move || {
-                let mut player1 = StrategyRandom {};
-                let mut player2 = StrategyAlphaBeta::default();
-                play(TOTAL_RUNS / cores, &mut player1, &mut player2)
-            })
+            let mut player1 = StrategyRandom::default();
+            let mut player2 = StrategyMCTS::default();
+            std::thread::spawn(move || play(TOTAL_RUNS / cores, &mut player1, &mut player2))
         })
         .collect::<Vec<_>>();
 
@@ -102,7 +100,7 @@ fn main() -> Result<(), crate::errors::Error> {
     }
 
     println!(
-        "total {} play1 {:.2}%, play2 {:.2}%, draw {:.2}%",
+        "total {} Random:{:.2}%, MCTS:{:.2}%, draw {:.2}%",
         played,
         p1 as f32 / played as f32 * 100.,
         p2 as f32 / played as f32 * 100.,

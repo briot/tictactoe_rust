@@ -3,8 +3,14 @@ use crate::types::{Action, GameState};
 use rand::rngs::ThreadRng;
 use rand::Rng;
 
+#[derive(Default)]
 pub struct StrategyRandom {}
+
 impl Strategy for StrategyRandom {
+    fn name(&self) -> String {
+        "Random".into()
+    }
+
     fn play(&mut self, state: &GameState, rng: &mut ThreadRng) -> Action {
         let legal = state.legal_moves();
         let mut choice = rng.gen_range(0..legal.occupied.count_zeros());

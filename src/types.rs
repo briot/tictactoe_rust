@@ -101,7 +101,9 @@ impl std::fmt::Display for GameState {
                 '.'
             }
         }
-        writeln!(f, "{:?}", self.score())?;
+        writeln!(f, "{:?} {} to play", self.score(),
+           (if self.is_player1 { "player1" } else { "player2" })
+        )?;
         writeln!(f, "{} {} {}", img(self, 1), img(self, 2), img(self, 4))?;
         writeln!(f, "{} {} {}", img(self, 8), img(self, 16), img(self, 32))?;
         writeln!(f, "{} {} {}", img(self, 64), img(self, 128), img(self, 256))?;

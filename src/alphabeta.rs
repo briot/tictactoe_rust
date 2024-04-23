@@ -66,6 +66,10 @@ impl StrategyAlphaBeta {
 }
 
 impl Strategy for StrategyAlphaBeta {
+    fn name(&self) -> String {
+        "AlphaBeta".into()
+    }
+
     fn play(&mut self, state: &GameState, _: &mut ThreadRng) -> Action {
         let (_, m) = self.play_with_score(state);
         Action::Put { mask: m }
