@@ -4,7 +4,7 @@ mod mcts;
 mod random;
 mod strategy;
 mod types;
-use crate::alphabeta::StrategyAlphaBeta;
+// use crate::alphabeta::StrategyAlphaBeta;
 use crate::mcts::StrategyMCTS;
 use crate::random::StrategyRandom;
 use crate::strategy::Strategy;
@@ -81,9 +81,11 @@ fn main() -> Result<(), crate::errors::Error> {
 
     let handles = (0..cores)
         .map(|_| {
-            let mut player1 = StrategyRandom::default();
-            let mut player2 = StrategyMCTS::default();
-            std::thread::spawn(move || play(TOTAL_RUNS / cores, &mut player1, &mut player2))
+            std::thread::spawn(move || {
+                let mut player1 = StrategyRandom::default();
+                let mut player2 = StrategyMCTS::default();
+                play(TOTAL_RUNS / cores, &mut player1, &mut player2)
+            })
         })
         .collect::<Vec<_>>();
 

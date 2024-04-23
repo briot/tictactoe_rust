@@ -19,8 +19,8 @@ pub struct LegalMoves {
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct GameState {
-    pub player1: Grid,    // bit set to 1 if player1 occupies the cell
-    pub player2: Grid,    // bit set to 1 if player1 occupies the cell
+    pub player1: Grid, // bit set to 1 if player1 occupies the cell
+    pub player2: Grid, // bit set to 1 if player1 occupies the cell
     pub is_player1: bool, // true if next to play is player1
 }
 
@@ -38,6 +38,8 @@ impl GameState {
     pub fn perform(&self, action: Action) -> Self {
         match action {
             Action::Put { mask } => {
+                assert!(self.player1 & mask == 0);
+                assert!(self.player2 & mask == 0);
                 if self.is_player1 {
                     GameState {
                         player1: self.player1 | mask,
@@ -101,12 +103,19 @@ impl std::fmt::Display for GameState {
                 '.'
             }
         }
-        writeln!(f, "{:?} {} to play", self.score(),
-           (if self.is_player1 { "player1" } else { "player2" })
+        writeln!(
+            f,
+            "{}/{:?}",
+            (if self.is_player1 {
+                "player1"
+            } else {
+                "player2"
+            }),
+            self.score(),
         )?;
         writeln!(f, "{} {} {}", img(self, 1), img(self, 2), img(self, 4))?;
         writeln!(f, "{} {} {}", img(self, 8), img(self, 16), img(self, 32))?;
-        writeln!(f, "{} {} {}", img(self, 64), img(self, 128), img(self, 256))?;
+        write!(f, "{} {} {}", img(self, 64), img(self, 128), img(self, 256))?;
         Ok(())
     }
 }
